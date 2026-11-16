@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Энергия на тарелке — игра</title>
+<style>
+:root{--bg:#101c32;--panel:#1b2b49;--gold:#ffd166;--green:#45d483;--text:#f7f9ff;--muted:#b9c6dc}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(135deg,#101c32,#203b59);color:var(--text);font-family:Arial,sans-serif;min-height:100vh;padding:20px}
+.container{max-width:1100px;margin:auto}
+header{text-align:center;padding:15px}
+h1{font-size:clamp(28px,5vw,46px);margin:5px;color:var(--gold)}
+.subtitle{color:var(--muted);font-size:17px}
+.scores{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin:20px 0}
+.team{background:var(--panel);border:2px solid transparent;border-radius:16px;padding:16px;text-align:center;cursor:pointer}
+.team.active{border-color:var(--gold);box-shadow:0 0 18px #ffd16655}
+.team h2{margin:0 0 8px;font-size:21px}
+.score{font-size:36px;font-weight:bold;color:var(--gold)}
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}
+.category{background:#29466c;padding:13px 5px;text-align:center;border-radius:10px;font-size:clamp(11px,1.7vw,16px);font-weight:bold;min-height:76px;display:flex;align-items:center;justify-content:center}
+.cell{background:#245b83;color:var(--gold);border:0;border-radius:10px;min-height:72px;font-size:clamp(20px,3vw,28px);font-weight:bold;cursor:pointer}
+.cell:hover:not(:disabled){background:#327ba9;transform:scale(1.03)}
+.cell:disabled{background:#26364b;color:#738096;cursor:default;text-decoration:line-through}
+.info{text-align:center;color:var(--muted);margin:18px 0}
+button{font-family:inherit}
+.reset{display:block;margin:22px auto;background:#e9a23b;color:#18253a;border:0;padding:13px 22px;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer}
+.modal{display:none;position:fixed;inset:0;background:#07101ddd;z-index:5;align-items:center;justify-content:center;padding:18px}
+.modal.show{display:flex}
+.dialog{width:min(650px,100%);background:#1b2b49;border:2px solid var(--gold);border-radius:20px;padding:28px;text-align:center;box-shadow:0 15px 60px #0008}
+.points{color:var(--gold);font-weight:bold;font-size:20px}
+.question{font-size:clamp(21px,4vw,30px);line-height:1.35;margin:24px 0}
+.answer{display:none;background:#263f60;border-radius:12px;padding:17px;margin:18px 0;font-size:20px;line-height:1.4}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:20px}
+.actions button{border:0;border-radius:9px;padding:12px 16px;font-size:15px;font-weight:bold;cursor:pointer}
+.reveal{background:var(--gold);color:#17243a}
+.correct{background:var(--green);color:#102b20}
+.wrong{background:#f07878;color:#351414}
+.close{background:#536783;color:white}
+@media(max-width:650px){body{padding:10px}.board{gap:5px}.category{padding:7px 3px;min-height:83px}.cell{min-height:57px}.team{padding:12px}.dialog{padding:20px}}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>🥗 Энергия на тарелке</h1>
+<div class="subtitle">Интеллектуальная игра о здоровом питании</div>
+</header>
+
+<div class="scores">
+<div class="team active" id="team0" onclick="setTeam(0)">
+<h2>🔵 Команда 1</h2><div class="score" id="score0">0</div><small>Нажмите, чтобы выбрать</small>
+</div>
+<div class="team" id="team1" onclick="setTeam(1)">
+<h2>🟠 Команда 2</h2><div class="score" id="score1">0</div><small>Нажмите, чтобы выбрать</small>
+</div>
+</div>
+
+<div class="board" id="board"></div>
+<div class="info" id="progress">Использовано вопросов: 0 из 25</div>
+<button class="reset" onclick="resetGame()">↻ Начать новую игру</button>
+</div>
+
+<div class="modal" id="modal">
+<div class="dialog">
+<div class="points" id="points"></div>
+<div class="question" id="question"></div>
+<div class="answer" id="answer"></div>
+<div class="actions">
+<button class="reveal" id="reveal" onclick="showAnswer()">Показать ответ</button>
+<button class="correct" id="correct" onclick="award(true)" style="display:none">✓ Ответ верный</button>
+<button class="wrong" id="wrong" onclick="award(false)" style="display:none">✗ Ответ неверный</button>
+<button class="close" onclick="closeModal()">Закрыть</button>
+</div>
+</div>
+</div>
+
+<script>
+const categories = [
+{
+name:"🍎 Группы продуктов",
+questions:[
+["Какие продукты помогают организму расти и укреплять мышцы?","Белковые продукты: мясо, рыба, яйца, творог, бобовые."],
+["К какой группе относятся яблоки, груши и бананы?","К фруктам."],
+["Назови два продукта из группы овощей.","Например: морковь и огурец."],
+["Какие продукты являются источником кальция для костей?","Молоко, сыр, творог и другие молочные продукты."],
+["Почему важно есть продукты разных групп?","Потому что организму нужны разные питательные вещества для роста, энергии и здоровья."]
+]},
+{
+name:"💚 Полезные привычки",
+questions:[
+["Что нужно сделать перед едой?","Вымыть руки с мылом."],
+["Сколько раз в день желательно чистить зубы?","Два раза в день."],
+["Почему полезно завтракать?","Завтрак помогает получить энергию и лучше сосредоточиться."],
+["Почему важно не торопиться во время еды?","Так легче хорошо пережёвывать пищу и замечать чувство сытости."],
+["Назови три полезные привычки, которые помогают сохранить здоровье.","Например: полноценный сон, движение, разнообразное питание, гигиена и питьевой режим."]
+]},
+{
+name:"💧 Вода и напитки",
+questions:[
+["Какой напиток лучше всего утоляет жажду?","Обычная чистая питьевая вода."],
+["Почему организму нужна вода?","Вода помогает работе органов, переносу питательных веществ и регулированию температуры тела."],
+["Какой напиток обычно содержит много добавленного сахара: вода или сладкая газировка?","Сладкая газировка."],
+["Что лучше взять с собой на прогулку в жаркий день?","Бутылку чистой питьевой воды."],
+["Почему важно пить в течение дня, а не только когда очень хочется пить?","Чтобы поддерживать нормальный водный баланс организма."]
+]},
+{
+name:"🎒 Перекус для школы",
+questions:[
+["Что можно взять на школьный перекус вместо конфет?","Яблоко, банан или другой фрукт."],
+["Какой перекус удобно положить в контейнер: нарезанную морковь или леденцы?","Нарезанную морковь."],
+["Почему важно мыть фрукт перед тем, как его съесть?","Чтобы удалить грязь и возможные загрязнения с поверхности."],
+["Собери пример полезного перекуса из двух продуктов.","Например: яблоко и натуральный йогурт."],
+["Что нужно учитывать, выбирая перекус для школы? Назови не менее трёх условий.","Польза и разнообразие, свежесть и безопасность продуктов, удобство хранения и отсутствие индивидуальных аллергенов."]
+]},
+{
+name:"🍽️ Собираем тарелку",
+questions:[
+["Что обязательно должно быть в разнообразном рационе: только сладости или разные продукты?","Разные продукты."],
+["Назови один овощ, который можно добавить к обеду.","Например: помидор, огурец, брокколи или морковь."],
+["Почему полезно добавлять овощи и фрукты в ежедневное меню?","Они содержат витамины, минералы и пищевые волокна."],
+["Из каких основных частей можно составить сбалансированный обед?","Овощи и фрукты, источник белка и продукты из зерновых или другие источники энергии."],
+["Предложи пример разнообразного обеда, в котором есть овощи, белок и гарнир.","Например: гречка, запечённая курица и салат из свежих овощей."]
+]}
+];
+
+let scores=[0,0], activeTeam=0, used=new Set(), current=null;
+
+function buildBoard(){
+ const board=document.getElementById("board");
+ board.innerHTML="";
+ categories.forEach((cat,c)=>{
+  const head=document.createElement("div");
+  head.className="category";head.textContent=cat.name;board.appendChild(head);
+ });
+ for(let q=0;q<5;q++){
+  categories.forEach((cat,c)=>{
+   const index=c*5+q;
+   const btn=document.createElement("button");
+   btn.className="cell";
+   btn.textContent=(q+1)*100;
+   btn.disabled=used.has(index);
+   btn.onclick=()=>openQuestion(c,q,index);
+   board.appendChild(btn);
+  });
+ }
+ update();
+}
+function setTeam(n){
+ activeTeam=n;
+ document.getElementById("team0").classList.toggle("active",n===0);
+ document.getElementById("team1").classList.toggle("active",n===1);
+}
+function openQuestion(c,q,index){
+ if(used.has(index))return;
+ current={c,q,index,points:(q+1)*100};
+ document.getElementById("points").textContent=categories[c].name+" · "+current.points+" баллов";
+ document.getElementById("question").textContent=categories[c].questions[q][0];
+ document.getElementById("answer").textContent="Ответ: "+categories[c].questions[q][1];
+ document.getElementById("answer").style.display="none";
+ document.getElementById("reveal").style.display="inline-block";
+ document.getElementById("correct").style.display="none";
+ document.getElementById("wrong").style.display="none";
+ document.getElementById("modal").classList.add("show");
+}
+function showAnswer(){
+ document.getElementById("answer").style.display="block";
+ document.getElementById("reveal").style.display="none";
+ document.getElementById("correct").style.display="inline-block";
+ document.getElementById("wrong").style.display="inline-block";
+}
+function award(isCorrect){
+ scores[activeTeam]+=isCorrect?current.points:-current.points;
+ used.add(current.index);
+ closeModal();buildBoard();
+}
+function closeModal(){
+ document.getElementById("modal").classList.remove("show");
+}
+function update(){
+ document.getElementById("score0").textContent=scores[0];
+ document.getElementById("score1").textContent=scores[1];
+ document.getElementById("progress").textContent="Использовано вопросов: "+used.size+" из 25";
+}
+function resetGame(){
+ if(!confirm("Начать новую игру? Все очки и использованные вопросы будут сброшены."))return;
+ scores=[0,0];used.clear();setTeam(0);buildBoard();
+}
+buildBoard();
+</script>
+</body>
+</html>
